@@ -1,0 +1,36 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# IDE
+.idea/
+
+# UV
+uv.lock
+.python-version
+
+# Project specific - DLLs (binary, large)
+*.dll
+
+# Media files
+*.mp3
+*.webm
+
+# Downloads/models folders
+downloads/
+models/
+
+# Data/output files
+*.txt
+!README.md
+!summary.txt  # if you want to keep this specific one
+
+# Python File
+models.py
