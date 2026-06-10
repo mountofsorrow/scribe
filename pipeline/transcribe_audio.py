@@ -1,54 +1,114 @@
-from faster_whisper import WhisperModel
+import os
+import sys
 import time
+from pathlib import Path
 
-# DLLs are in the same folder as this script
-# Path to your successfully downloaded and fixed model
-model_path = r'D:\Work\Python (2025)\20. Transcription\models\large-v3'
+# path setup
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from paths import MODELS_DIR, AUDIO_PATH, TRANSCRIPT, PROJECT_DLLS
 
-# Load the model with VRAM optimization
-print("Loading model into GPU... (This may take a moment)")
-model = WhisperModel(
-    model_path,
-    device="cuda",
-    compute_type= "int8_float16",  # Keeps VRAM usage around 4.5GB
-    local_files_only=True
-)
+try:
+    from pipeline.config import WHISPER_MODEL, WHISPER_COMPUTE_TYPE, WHISPER_BEAM_SIZE, TRANSCRIPTION_LANG
+except ModuleNotFoundError:
+    from config import WHISPER_MODEL, WHISPER_COMPUTE_TYPE, WHISPER_BEAM_SIZE, TRANSCRIPTION_LANG
 
-# Set the file path
-audio_path = r"D:\Work\Python (2025)\20. Transcription\webcams.mp3"
 
-initial_prompt = "این یک فایل صوتی به زبان فارسی است که ممکن است کلمات انگلیسی مثل AI, Python, یا Windows در آن باشد. لطفا همان‌طور که شنیده می‌شود بنویسید."
+# model loader
+def load_model():
+    # dll setup — must happen before ctranslate2 is used
+    os.add_dll_directory(str(PROJECT_DLLS))
 
-print(f"Processing {audio_path}...")
-start = time.time()
+    from faster_whisper import WhisperModel
 
-# The transcription generates segments lazily
-segments, info = model.transcribe(
-    audio_path,
-    language="fa",
-    beam_size=5,
-    initial_prompt=initial_prompt,
-    vad_filter=True,
-    word_timestamps=False
-)
+    model_path = str(MODELS_DIR / WHISPER_MODEL)
+    print(f"Loading Model ({WHISPER_MODEL}) Into GPU... (This May Take A Moment)")
 
-print(f"Detected language '{info.language}' with probability {info.language_probability:.2f}")
+    model = WhisperModel(
+        model_path,
+        device="cuda",
+        compute_type=WHISPER_COMPUTE_TYPE,
+        local_files_only=True
+    )
+    return model
 
-# Save to a text file
-with open("transcript.txt", "w", encoding="utf-8") as f:
-    for segment in segments:
-        line = f"[{segment.start:.1f}s -> {segment.end:.1f}s] {segment.text}"
 
-        # prints to terminal to see progress
-        print(line)
-        # saves to the file
-        f.write(line + "\n")
+# transcriber
+def transcribe(model, audio_path: str, output_path: str = None) -> str:
+    """
+    Transcribe audio file and save to output_path.
+    Falls back to TRANSCRIPT from paths.py if no output_path given.
+    """
+    if output_path is None:
+        output_path = str(TRANSCRIPT)
 
-        # ensures the text is written to the disk immediately so u don't lose progress
-        f.flush()
+    initial_prompt = (
+        "این یک فایل صوتی به زبان فارسی است که ممکن است کلمات انگلیسی در آن باشد. "
+        "لطفا همان‌طور که شنیده می‌شود بنویسید."
+    ) if TRANSCRIPTION_LANG == "fa" else None
 
-total_seconds = int(time.time() - start)
-minutes = total_seconds // 60
-seconds = total_seconds % 60
+    print(f"\nProcessing {audio_path}...")
+    start = time.time()
 
-print(f"Done! Saved to transcript.txt. Total time: {minutes}m {seconds}s")
+    segments, info = model.transcribe(
+        audio_path,
+        language=TRANSCRIPTION_LANG,
+        beam_size=WHISPER_BEAM_SIZE,
+        initial_prompt=initial_prompt,
+        vad_filter=True,
+        word_timestamps=False
+    )
+
+    print(f"Detected Language '{info.language}' With Probability {info.language_probability:.2f}")
+
+    # write segments to transcript file as they stream in
+    transcript_path = Path(output_path)
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            for segment in segments:
+                line = f"[{segment.start:.1f}s -> {segment.end:.1f}s] {segment.text}"
+                print(line)
+                f.write(line + "\n")
+                f.flush()
+    except Exception as e:
+        # transcription failed midway — delete partial file
+        if transcript_path.exists():
+            transcript_path.unlink()
+            print(f"\nTranscription Failed Midway — Deleted Incomplete File: {output_path}")
+        raise RuntimeError(f"Transcription Failed: {e}")
+
+    # check if transcript is empty or too short to be valid
+    with open(output_path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+
+    if not content:
+        transcript_path.unlink()
+        raise RuntimeError(
+            "Transcription Produced No Output.\n"
+            "The Audio May Be Silent, Too Short, Or In The Wrong Language."
+        )
+
+    if len(content) < 100:
+        print(
+            f"\nWarning: Transcript Is Unusually Short ({len(content)} Characters).\n"
+            "This Might Be A Short Announcement Or A Silent Recording."
+        )
+        choice = input("Continue Anyway? [Y / N]\n> ").strip().lower()
+        if choice != "y":
+            transcript_path.unlink()
+            raise RuntimeError("Pipeline Cancelled By User — Transcript Too Short.")
+
+    total_seconds = int(time.time() - start)
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    print(f"\nDone! Saved To {output_path}. Total Time: {minutes}m {seconds}s")
+    return output_path
+
+
+# entry point
+def main():
+    model = load_model()
+    transcribe(model, str(AUDIO_PATH))
+
+
+if __name__ == "__main__":
+    main()
