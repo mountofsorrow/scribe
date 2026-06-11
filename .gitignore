@@ -1,36 +1,39 @@
-# Virtual Environment
+# ── Environment ──
 .venv/
 venv/
 ENV/
 
-# Python
+# ── Python ──
 __pycache__/
 *.py[cod]
 *.so
 .Python
 
-# IDE
+# ── IDE ──
 .idea/
 
-# UV
-uv.lock
+# ── UV ──
 .python-version
 
-# Project specific - DLLs (binary, large)
+# ── Secrets ──
+.env
+
+# ── CUDA DLLs ──
 *.dll
 
-# Media files
+# ── Media files ──
 *.mp3
+*.wav
 *.webm
+*.flv
 
-# Downloads/models folders
+# ── Project folders ──
 downloads/
 models/
+sessions/
 
-# Data/output files
-*.txt
-!README.md
-!summary.txt  # if you want to keep this specific one
-
-# Python File
-models.py
+# ── Output files ──
+transcript.txt
+summary.txt
+summary.md
+summary_*.md
