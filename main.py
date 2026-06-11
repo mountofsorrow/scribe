@@ -487,7 +487,9 @@ def settings():
             continue
 
         # save back to .env
-        lines =
+        lines = "\n".join(f"{k}={v}" for k, v in current.items() if v is not None)
+        env_path.write_text(lines + "\n", encoding="utf-8")
+        print("Saved.")
 
 
 # ── option 7: about ──
