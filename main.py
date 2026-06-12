@@ -117,10 +117,18 @@ def show_completion(session_dir: Path):
     print("  3) Back To Main Menu\n")
 
     # flush buffered keystrokes before waiting for input
+    time.sleep(0.2)
     if HAS_MSVCRT:
-        time.sleep(0.2)
+        # Windows — flush buffered keystrokes
         while msvcrt.kbhit():
             msvcrt.getch()
+    else:
+        # Mac/Linux — flush stdin using termios
+        try:
+            import termios
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
+        except Exception:
+            pass
 
     while True:
         choice = input("> ").strip()
